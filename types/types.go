@@ -1,8 +1,9 @@
 package types
 
 type Message struct {
-	Event string
-	Data  string
+	Event     string
+	ErrorData string
+	DateTime  int64
 	//
 	IMEI string
 	//

@@ -10,6 +10,7 @@ import (
 
 type MongoStore struct {
 	Vehicles IVehicle
+	Trips    ITrip
 }
 
 func ConnectToDatabase(uri string, dbname string) *MongoStore {
@@ -24,6 +25,7 @@ func ConnectToDatabase(uri string, dbname string) *MongoStore {
 	db := client.Database(dbname)
 
 	return &MongoStore{
-		Vehicles: InitVehicleStore(db.Collection("vehicles")),
+		Vehicles: InitVehicleStore(db.Collection("vehicles"), db.Collection("trips")),
+		Trips:    InitTripStore(db.Collection("trips")),
 	}
 }

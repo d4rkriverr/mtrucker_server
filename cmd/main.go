@@ -5,6 +5,7 @@ import (
 	"mtrack/device_server/decoder"
 	"mtrack/device_server/domain"
 	"mtrack/device_server/types"
+	"time"
 )
 
 func main() {
@@ -12,12 +13,14 @@ func main() {
 	const (
 		CONN_TYPE = "tcp"
 		CONN_URI  = ":1885"
+
+		MONGODB_URI = "mongodb://root:@localhost:27017/?authMechanism=DEFAULT&authSource=admin"
 	)
 
 	channel := make(chan types.Message, 10000)
 
 	// var db any
-	store := domain.ConnectToDatabase("mongodb://localhost:27017", "mtrucker")
+	store := domain.ConnectToDatabase(MONGODB_URI, "mtrucker")
 
 	// start tcp server
 	go decoder.START_TPC_SERVER(CONN_TYPE, CONN_URI, channel)
@@ -34,7 +37,6 @@ func main() {
 		case "DISCONNECT":
 			err = store.Vehicles.UpdateDeviceStatus(msg.IMEI, false) // DEVICE OFFLINE
 		case "STATUS":
-			fmt.Printf("%+v \n", msg)
 			err = store.Vehicles.UpdateCurrentStatus(msg.IMEI,
 				msg.Engine,
 				msg.GsmSignle,
@@ -42,25 +44,46 @@ func main() {
 				msg.Acc,
 				msg.Gps,
 			)
-		case "GPSINFO":
-		// 	notifyApi = true
+		case "LOCATION":
+			// GET VEHICLE
+
+			var e types.Vehicle
+			e, err = store.Vehicles.GetVehicle(msg.IMEI)
+
+			if err == nil {
+				crnTime := time.Now().Unix()
+				lastID := e.LastTripID
+
+				tpEvent := types.TripEvent{
+					Latitude:  msg.Latitude,
+					Longitude: msg.Longitude,
+					Speed:     msg.Speed,
+					Course:    msg.Course,
+				}
+
+				if (crnTime - e.LastGpsUpdate) < 1800 {
+					fmt.Println("[*] APPEND EVENT TO TRIP: ", lastID)
+					err = store.Trips.AddEvent(lastID, crnTime, tpEvent)
+				} else {
+
+					fmt.Println("[*] NEW TRIP")
+					lastID, err = store.Trips.CreateTrip(e.IMEI, crnTime, tpEvent)
+				}
+
+				if err == nil {
+					err = store.Vehicles.UpdateLocationInfo(e.IMEI, lastID, crnTime)
+				}
+			}
+
 		default:
-			fmt.Println(msg.Data)
+			fmt.Println(msg.ErrorData)
 		}
+
 		if err != nil {
 			fmt.Println("DB ERROR: ", err.Error())
 		}
 	}
-
-	// s := "" // the hex message
-
-	// msg := decryptMessage(s) // decrypt messages
-
 }
-
-// func decryptMessage(s string) Message {
-// 	return Message{}
-// }
 
 type Vehicle struct {
 	ID   string

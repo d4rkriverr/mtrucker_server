@@ -31,40 +31,47 @@ func getTerminalInfo(s string) (bool, bool, bool) {
 	return s[0] == 49, s[1] == 49, s[6] == 49
 }
 
-// func getVoltageLevel(v int64) string {
-// 	var result = "no power (shutting down)"
-// 	switch v {
-// 	case 1:
-// 		result = "extremely low battery"
-// 	case 2:
-// 		result = "very low battery (low battery alarm)"
-// 	case 3:
-// 		result = "low battery (can be used normally)"
-// 	case 4:
-// 		result = "medium"
-// 	case 5:
-// 		result = "high"
-// 	case 6:
-// 		result = "very high"
-// 	default:
-// 		result = "no power (shutting down)"
-// 	}
-// 	return result
-// }
+// ---- //
+type GpsLocationInfo struct {
+	Latitude  float64
+	Longitude float64
+	Speed     int64
+	Course    int64
+}
 
-// func getGSMSingle(v int64) string {
-// 	var result string
-// 	switch v {
-// 	case 1:
-// 		result = "extremely weak signal"
-// 	case 2:
-// 		result = "very weak signal"
-// 	case 3:
-// 		result = "good signal"
-// 	case 4:
-// 		result = "strong signal"
-// 	default:
-// 		result = "no signal"
-// 	}
-// 	return result
-// }
+func ParseGpsLocation(s string) GpsLocationInfo {
+	var result GpsLocationInfo
+
+	data := gps_StringToArr(s)
+	result.Latitude = calLatLong(data[2])
+	result.Longitude = calLatLong(data[3])
+	result.Speed, _ = strconv.ParseInt(data[4], 16, 64)
+	// data.RealTimeGps, data.GpsPositioned, data.EastLongitude, data.NorthLatitude = calGpsStatus(s[5])
+	result.Course = calGpsCourse(data[5])
+
+	return result
+}
+
+func gps_StringToArr(s string) []string {
+	var sarr []string
+	sarr = append(sarr, s[:12])   // [0] DATETIME
+	sarr = append(sarr, s[12:14]) // [1] Quantity of GPS information satellites
+	sarr = append(sarr, s[14:22]) // [2] Latitude
+	sarr = append(sarr, s[22:30]) // [3] Longitude
+	sarr = append(sarr, s[30:32]) // [4] speed
+	sarr = append(sarr, s[32:36]) // [5] Course / Status
+	return sarr
+}
+
+func calLatLong(s string) float64 {
+	r, _ := strconv.ParseInt(s, 16, 64)
+	return float64(r) / float64(1800000)
+}
+
+func calGpsCourse(s string) int64 {
+	b, _ := strconv.ParseInt(s[:2], 16, 32)
+	c, _ := strconv.ParseInt(s[2:], 16, 32)
+	sBin := fmt.Sprintf("%08b%08b", b, c)
+	course, _ := strconv.ParseInt(sBin[6:], 2, 64)
+	return course
+}

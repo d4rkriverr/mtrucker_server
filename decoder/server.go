@@ -6,6 +6,7 @@ import (
 	"mtrack/device_server/types"
 	"net"
 	"os"
+	"time"
 
 	"github.com/sigurn/crc16"
 )
@@ -52,16 +53,16 @@ func handleRequest(cn net.Conn, ch chan types.Message) {
 		hexStr := hex.EncodeToString(buf[:bufLength])
 		msg, err := getMessageValue(hexStr)
 		if err != nil {
-			ch <- types.Message{Event: "ERROR", Data: "[E1X01] unknown hex header: " + hexStr}
+			ch <- types.Message{Event: "ERROR", ErrorData: "[E1X01] unknown hex header: " + hexStr, DateTime: time.Now().Unix()}
 			continue
 		}
 
 		switch msg.Protocol {
-		case "01":
+		case "01": // LOGIN
 			imei = msg.Value
 			cn.Write(responseMessage(msg, ""))
-			ch <- types.Message{Event: "LOGIN", IMEI: imei}
-		case "13":
+			ch <- types.Message{Event: "LOGIN", IMEI: imei, DateTime: time.Now().Unix()}
+		case "13": // HEARTBIT
 			val := ParseHeartBit(msg.Value)
 			cn.Write(responseMessage(msg, ""))
 			ch <- types.Message{
@@ -72,16 +73,29 @@ func handleRequest(cn net.Conn, ch chan types.Message) {
 				Engine:       val.Engine,
 				Acc:          val.Acc,
 				Gps:          val.Gps,
+				DateTime:     time.Now().Unix(),
 			}
+		case "12": // GPS LOCATION
+			val := ParseGpsLocation(msg.Value)
+			ch <- types.Message{
+				Event:     "LOCATION",
+				IMEI:      imei,
+				Latitude:  val.Latitude,
+				Longitude: val.Longitude,
+				Speed:     val.Speed,
+				Course:    val.Course,
+				DateTime:  time.Now().Unix(),
+			}
+		case "8a": // CHECK TIME
+		case "94": // INFO TRANSMISSION
 		default:
-			ch <- types.Message{Event: "ERROR", Data: "[E1X02] unknown operation: " + hexStr}
+			ch <- types.Message{Event: "ERROR", ErrorData: "[E1X02] unknown operation: " + hexStr, DateTime: time.Now().Unix()}
 			continue
 		}
-		// fmt.Println(operation, value)
 	}
 
 	if imei != "" {
-		ch <- types.Message{Event: "DISCONNECT", IMEI: imei}
+		ch <- types.Message{Event: "DISCONNECT", IMEI: imei, DateTime: time.Now().Unix()}
 	}
 
 	cn.Close()
